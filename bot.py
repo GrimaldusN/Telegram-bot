@@ -74,7 +74,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/restart - Перезагрузить систему\n"
         "/shutdown - Выключить систему\n"
     )
-    await update.message.reply_text(help_text)
+    await update.callback_query.message.reply_text(help_text)
 
 async def system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -89,7 +89,7 @@ async def system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Использование памяти: {memory}%\n"
         f"Использование диска: {disk}%"
     )
-    await update.message.reply_text(status)
+    await update.callback_query.message.reply_text(status)
 
 async def take_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -138,11 +138,52 @@ async def search_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Файлы не найдены.")
 
-# Теперь добавим InlineKeyboardButton для каждой команды
+# Функции для обработки команд по кнопкам
+
+async def clipboard_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    clipboard_content = pyperclip.paste()  # Получаем содержимое буфера обмена
+    await update.callback_query.message.reply_text(f"Содержимое буфера обмена: {clipboard_content}")
+
+async def find_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.callback_query.message.reply_text("Пример: /find_process chrome")
+        return
+
+    process_name = ' '.join(context.args)
+    if is_program_running(process_name):
+        await update.callback_query.message.reply_text(f"Процесс {process_name} запущен.")
+    else:
+        await update.callback_query.message.reply_text(f"Процесс {process_name} не найден.")
+
+async def copy_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global copy_buffer
+    if not context.args:
+        await update.callback_query.message.reply_text("Пример: /copy_text Hello World")
+        return
+    copy_buffer = ' '.join(context.args)
+    pyperclip.copy(copy_buffer)
+    await update.callback_query.message.reply_text(f"Текст скопирован: {copy_buffer}")
+
+async def paste_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if copy_buffer is None:
+        await update.callback_query.message.reply_text("Буфер пуст.")
+        return
+    pyperclip.paste()
+    await update.callback_query.message.reply_text(f"Текст из буфера обмена: {copy_buffer}")
+
+async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.message.reply_text("Перезагрузка системы...")
+    subprocess.call(["shutdown", "/r", "/t", "1"])  # Перезагрузка через команду Windows
+
+async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.message.reply_text("Выключение системы...")
+    subprocess.call(["shutdown", "/s", "/t", "1"])  # Выключение через команду Windows
+
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     command = query.data
 
+    # Обработать команды, переданные через callback_data
     if command == '/help':
         await help_command(update, context)
     elif command == '/status':
@@ -153,6 +194,28 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await open_program(update, context)
     elif command == '/search':
         await search_file(update, context)
+    elif command == '/find_process':
+        await find_process(update, context)
+    elif command == '/copy_text':
+        await copy_text(update, context)
+    elif command == '/paste_text':
+        await paste_text(update, context)
+    elif command == '/list_files':
+        await list_files(update, context)
+    elif command == '/send_file':
+        await send_file(update, context)
+    elif command == '/copy_file':
+        await copy_file(update, context)
+    elif command == '/cut_file':
+        await cut_file(update, context)
+    elif command == '/paste_file':
+        await paste_file(update, context)
+    elif command == '/clipboard_status':
+        await clipboard_status(update, context)
+    elif command == '/restart':
+        await restart(update, context)
+    elif command == '/shutdown':
+        await shutdown(update, context)
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
