@@ -32,17 +32,21 @@ To run this bot, follow these steps:
     git clone https://github.com/GrimaldusN/Telegram-bot.git
 
 2. Navigate into the project directory:
+    ```bash
     cd Telegram-bot
 
 3. Install the required dependencies:
+    ```bash
     pip install -r requirements.txt
 
 4. Create a Telegram bot by talking to BotFather on Telegram and obtain your bot's API token.
 
 5. Set up your bot by adding your bot's token to a .env file:
+    ```text
     TELEGRAM_TOKEN=your_bot_token_here
 
 6. Run the bot:
+    ```bash
     python bot.py
 
 ## Usage
