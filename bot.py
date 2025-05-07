@@ -34,7 +34,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Status", callback_data='/status')],
         [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
         [InlineKeyboardButton("Open Program", callback_data='/open')],
-        [InlineKeyboardButton("Search Files", callback_data='/search')]
+        [InlineKeyboardButton("Search Files", callback_data='/search')],
+        [InlineKeyboardButton("Find Process", callback_data='/find_process')],
+        [InlineKeyboardButton("Copy Text", callback_data='/copy_text')],
+        [InlineKeyboardButton("Paste Text", callback_data='/paste_text')],
+        [InlineKeyboardButton("List Files", callback_data='/list_files')],
+        [InlineKeyboardButton("Send File", callback_data='/send_file')],
+        [InlineKeyboardButton("Copy File", callback_data='/copy_file')],
+        [InlineKeyboardButton("Cut File", callback_data='/cut_file')],
+        [InlineKeyboardButton("Paste File", callback_data='/paste_file')],
+        [InlineKeyboardButton("Clipboard Status", callback_data='/clipboard_status')],
+        [InlineKeyboardButton("Restart", callback_data='/restart')],
+        [InlineKeyboardButton("Shutdown", callback_data='/shutdown')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Бот запущен. Выберите команду:", reply_markup=reply_markup)
