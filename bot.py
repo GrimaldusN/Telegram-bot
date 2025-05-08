@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, CallbackContext
 from telegram.error import TelegramError
 import subprocess
 import logging
@@ -11,7 +11,12 @@ import io
 import os
 import sys
 import asyncio
+import json
+import configparser
 from pathlib import Path
+
+
+SUPPORTED_TEXT_FORMATS = (".txt", ".json", ".ini", ".log", ".md")
 
 # Инициализация логгера
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +53,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Help", callback_data='/help')],
         [InlineKeyboardButton("Status", callback_data='/status')],
         [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
-        [InlineKeyboardButton("Paste Text", callback_data='/paste_text')],
+        [InlineKeyboardButton("Операции с файлами", callback_data='file_operations')],
         [InlineKeyboardButton("Clipboard Status", callback_data='/clipboard_status')],
         [InlineKeyboardButton("Restart", callback_data='/restart')],
         [InlineKeyboardButton("Shutdown", callback_data='/shutdown')]
@@ -73,6 +78,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/paste_text - Вставить текст\n"
         "/list_files <путь> - Файлы в директории\n"
         "/search <путь> <шаблон> - Поиск файлов\n"
+        "/view_file <путь> - Просмотр файла"
         "/send_file <путь> - Отправить файл\n"
         "/copy_file <файл> - Копировать файл\n"
         "/cut_file <файл> - Вырезать файл\n"
@@ -126,6 +132,77 @@ async def take_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     screenshot.save(byte_io, format='PNG')
     byte_io.seek(0)
     await update.message.reply_photo(byte_io)
+
+async def file_operations(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Проверяем, что сообщение существует
+    if update.message:
+        keyboard = [
+            [InlineKeyboardButton("Отправить файл", callback_data='send_file')],
+            [InlineKeyboardButton("Скопировать файл", callback_data='copy_file')],
+            [InlineKeyboardButton("Вставить файл", callback_data='paste_file')],
+            [InlineKeyboardButton("Вырезать файл", callback_data='cut_file')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Выберите операцию с файлом:", reply_markup=reply_markup)
+        logger.info("Пользователь запрашивает операцию с файлом.")
+    elif update.callback_query:
+        # Если это callback_query (например, для кнопки)
+        keyboard = [
+            [InlineKeyboardButton("Отправить файл", callback_data='send_file')],
+            [InlineKeyboardButton("Скопировать файл", callback_data='copy_file')],
+            [InlineKeyboardButton("Вставить файл", callback_data='paste_file')],
+            [InlineKeyboardButton("Вырезать файл", callback_data='cut_file')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.message.reply_text("Выберите операцию с файлом:", reply_markup=reply_markup)
+        logger.info("Пользователь запрашивает операцию с файлом через callback.")
+
+# Логика отправки файла
+async def send_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file_path = "путь_к_файлу"  # Например, можно запросить путь у пользователя
+    try:
+        with open(file_path, 'rb') as file:
+            await update.message.reply_document(file)
+        logger.info(f"Файл {file_path} успешно отправлен.")
+    except Exception as e:
+        logger.error(f"Ошибка при отправке файла {file_path}: {e}")
+        await update.message.reply_text(f"Ошибка при отправке файла: {e}")
+
+# Логика копирования файла
+async def copy_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    source_path = "путь_к_оригинальному_файлу"
+    destination_path = "путь_к_месту_копирования"
+    try:
+        shutil.copy(source_path, destination_path)
+        logger.info(f"Файл {source_path} успешно скопирован в {destination_path}.")
+        await update.message.reply_text("Файл успешно скопирован!")
+    except Exception as e:
+        logger.error(f"Ошибка при копировании файла {source_path} в {destination_path}: {e}")
+        await update.message.reply_text(f"Ошибка при копировании файла: {e}")
+
+# Логика вставки файла (например, из буфера обмена или папки)
+async def paste_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    source_path = "путь_к_вставляемому_файлу"
+    destination_path = "путь_к_месту_вставки"
+    try:
+        shutil.copy(source_path, destination_path)
+        logger.info(f"Файл {source_path} успешно вставлен в {destination_path}.")
+        await update.message.reply_text("Файл успешно вставлен!")
+    except Exception as e:
+        logger.error(f"Ошибка при вставке файла {source_path} в {destination_path}: {e}")
+        await update.message.reply_text(f"Ошибка при вставке файла: {e}")
+
+# Логика вырезания файла
+async def cut_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    source_path = "путь_к_файлу"
+    destination_path = "путь_к_месту_перемещения"
+    try:
+        shutil.move(source_path, destination_path)
+        logger.info(f"Файл {source_path} успешно перемещен в {destination_path}.")
+        await update.message.reply_text("Файл успешно перемещен!")
+    except Exception as e:
+        logger.error(f"Ошибка при перемещении файла {source_path} в {destination_path}: {e}")
+        await update.message.reply_text(f"Ошибка при перемещении файла: {e}")
 
 async def open_program(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -208,39 +285,41 @@ async def search_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Файлы не найдены.")
 
-async def send_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def view_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
-        logger.warning(f"Unauthorized user {update.effective_user.id} tried to send a file.")
+        logger.warning(f"Unauthorized user {update.effective_user.id} tried to view file.")
         return
-    file_path = ' '.join(context.args)
-    if not file_path:
-        await update.message.reply_text("Пример: /send_file C:/Path/To/File.txt")
-        return
-    if os.path.isfile(file_path):
-        with open(file_path, 'rb') as f:
-            await update.message.reply_document(f)
-    else:
-        await update.message.reply_text(f"Файл {file_path} не найден.")
 
-async def copy_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != AUTHORIZED_USER_ID:
-        logger.warning(f"Unauthorized user {update.effective_user.id} tried to copy file.")
+    if not context.args:
+        await update.message.reply_text("Укажи путь к файлу после команды, например:\n/viewfile C:\\Users\\file.txt")
         return
-    if len(context.args) < 1:
-        await update.message.reply_text("Пример: /copy_file C:/path/to/file.txt")
+
+    file_path = " ".join(context.args)
+
+    if not os.path.isfile(file_path):
+        await update.message.reply_text("Файл не найден.")
         return
-    file_path = ' '.join(context.args)
+
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in SUPPORTED_TEXT_FORMATS:
+        await update.message.reply_text("Поддерживаются только .txt, .json, .ini и похожие текстовые форматы.")
+        return
+
     try:
-        if os.path.exists(file_path):
-            global copy_buffer
-            copy_buffer = file_path
-            await update.message.reply_text(f"Файл скопирован: {file_path}")
-            logger.info(f"User {update.effective_user.id} copied file: {file_path}")
-        else:
-            await update.message.reply_text(f"Файл не найден: {file_path}")
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read(4096)  # ограничим до 4 KB
+            if ext == ".json":
+                parsed = json.loads(content)
+                content = json.dumps(parsed, indent=2, ensure_ascii=False)
+            elif ext == ".ini":
+                config = configparser.ConfigParser()
+                config.read_string(content)
+                content = "\n".join(f"[{section}]\n" + "\n".join(f"{k} = {v}" for k, v in config[section].items()) for section in config.sections())
+
+        await update.message.reply_text(f"Содержимое файла:\n\n{content}")
     except Exception as e:
-        await update.message.reply_text(f"Ошибка при копировании файла: {e}")
-        logger.error(f"Error copying file {file_path}: {e}")
+        logger.error(f"Ошибка при чтении файла {file_path}: {e}")
+        await update.message.reply_text(f"Ошибка при чтении файла:\n{e}")
 
 async def list_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -261,45 +340,6 @@ async def list_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Ошибка при получении содержимого папки: {e}")
         logger.error(f"Error listing files in {directory}: {e}")
-
-async def paste_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != AUTHORIZED_USER_ID:
-        logger.warning(f"Unauthorized user {update.effective_user.id} tried to paste file.")
-        return
-    if not copy_buffer:
-        await update.message.reply_text("Нет файла в буфере обмена.")
-        return
-    if len(context.args) < 1:
-        await update.message.reply_text("Пример: /paste_file C:/path/to/destination/")
-        return
-    destination = ' '.join(context.args)
-    try:
-        shutil.copy(copy_buffer, destination)
-        await update.message.reply_text(f"Файл вставлен в: {destination}")
-        logger.info(f"User {update.effective_user.id} pasted file to: {destination}")
-    except Exception as e:
-        await update.message.reply_text(f"Ошибка при вставке файла: {e}")
-        logger.error(f"Error pasting file to {destination}: {e}")
-
-async def cut_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != AUTHORIZED_USER_ID:
-        logger.warning(f"Unauthorized user {update.effective_user.id} tried to cut file.")
-        return
-    if len(context.args) < 1:
-        await update.message.reply_text("Пример: /cut_file C:/path/to/file.txt")
-        return
-    file_path = ' '.join(context.args)
-    try:
-        if os.path.exists(file_path):
-            global cut_buffer
-            cut_buffer = file_path
-            await update.message.reply_text(f"Файл вырезан: {file_path}")
-            logger.info(f"User {update.effective_user.id} cut file: {file_path}")
-        else:
-            await update.message.reply_text(f"Файл не найден: {file_path}")
-    except Exception as e:
-        await update.message.reply_text(f"Ошибка при вырезании файла: {e}")
-        logger.error(f"Error cutting file {file_path}: {e}")
 
 async def clipboard_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -376,6 +416,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif command == '/shutdown':
         logger.info(f"User {update.effective_user.id} pressed the 'Shutdown' button.")
         await shutdown(update, context)
+    elif query.data == 'file_operations':
+        await file_operations(update, context)
+    elif query.data == 'send_file':
+        await send_file(update, context)
+    elif query.data == 'copy_file':
+        await copy_file(update, context)
+    elif query.data == 'paste_file':
+        await paste_file(update, context)
+    elif query.data == 'cut_file':
+        await cut_file(update, context)
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -384,6 +434,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", system_status))
     app.add_handler(CommandHandler("screenshot", take_screenshot))
+    app.add_handler(CommandHandler("file_operations", file_operations))
     app.add_handler(CommandHandler("find_process", find_process))
     app.add_handler(CommandHandler("open", open_program))
     app.add_handler(CommandHandler("close", close_program))
@@ -391,6 +442,7 @@ def main():
     app.add_handler(CommandHandler("paste_text", paste_text))
     app.add_handler(CommandHandler("list_files", list_files))
     app.add_handler(CommandHandler("search", search_file))
+    app.add_handler(CommandHandler("view_file", view_file))
     app.add_handler(CommandHandler("send_file", send_file))
     app.add_handler(CommandHandler("copy_file", copy_file))
     app.add_handler(CommandHandler("cut_file", cut_file))
