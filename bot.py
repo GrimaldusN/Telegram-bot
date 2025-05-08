@@ -31,6 +31,14 @@ def is_program_running(program_name):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(f"Ошибка при обработке обновления {update}: {context.error}")
 
+async def safe_reply(update: Update, text: str):
+    if update.callback_query:
+        await update.callback_query.message.reply_text(text)
+    elif update.message:
+        await update.message.reply_text(text)
+    else:
+        logger.warning("Не удалось отправить сообщение: неизвестный тип update.")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
         logger.warning(f"Unauthorized user {update.effective_user.id} tried to use the bot.")
@@ -84,12 +92,18 @@ async def system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"User {user_id} requested system status.")
 
-    if update.callback_query:
-        await update.callback_query.message.reply_text("Состояние системы: всё работает.")
-    elif update.message:
-        await update.message.reply_text("Состояние системы: всё работает.")
-    else:
-        logger.warning("Неизвестный тип update")
+    cpu_usage = psutil.cpu_percent(interval=1)
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+
+    status_message = (
+        f"🖥 Состояние системы:\n\n"
+        f"🔧 Загрузка CPU: {cpu_usage}%\n"
+        f"🧠 Память: {memory.percent}% ({memory.used // (1024**2)} MB из {memory.total // (1024**2)} MB)\n"
+        f"💾 Диск: {disk.percent}% ({disk.used // (1024**3)} GB из {disk.total // (1024**3)} GB)"
+    )
+
+    await safe_reply(update, status_message)
 
 async def find_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
