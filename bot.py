@@ -13,6 +13,9 @@ import sys
 import asyncio
 import json
 import configparser
+import zipfile
+import py7zr
+import rarfile
 from pathlib import Path
 
 
@@ -54,6 +57,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Status", callback_data='/status')],
         [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
         [InlineKeyboardButton("Операции с файлами", callback_data='file_operations')],
+        [InlineKeyboardButton("Процессы (по CPU)", callback_data='proc_cpu')],
+        [InlineKeyboardButton("Процессы (по памяти)", callback_data='proc_mem')],
+        [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
         [InlineKeyboardButton("Clipboard Status", callback_data='/clipboard_status')],
         [InlineKeyboardButton("Restart", callback_data='/restart')],
         [InlineKeyboardButton("Shutdown", callback_data='/shutdown')]
@@ -110,6 +116,185 @@ async def system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await safe_reply(update, status_message)
+
+# Архивация
+def archive_file_zip(source_path: str, archive_path: str):
+    try:
+        with zipfile.ZipFile(archive_path, 'w') as archive:
+            archive.write(source_path, arcname=os.path.basename(source_path))
+        logger.info(f"ZIP-архив создан: {archive_path}")
+    except Exception as e:
+        logger.error(f"Ошибка при создании ZIP: {e}")
+
+def archive_file_7z(source_path: str, archive_path: str):
+    try:
+        with py7zr.SevenZipFile(archive_path, 'w') as archive:
+            archive.write(source_path, arcname=os.path.basename(source_path))
+        logger.info(f"7z-архив создан: {archive_path}")
+    except Exception as e:
+        logger.error(f"Ошибка при создании 7z: {e}")
+
+def archive_file_rar(source_path: str, archive_path: str):
+    try:
+        rarfile.PATH_SEP = '\\'
+        os.system(f"rar a -ep1 {archive_path} {source_path}")
+        logger.info(f"RAR-архив создан: {archive_path}")
+    except Exception as e:
+        logger.error(f"Ошибка при создании RAR: {e}")
+
+async def ask_archive_format(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [
+            InlineKeyboardButton("ZIP", callback_data="archive_zip"),
+            InlineKeyboardButton("7Z", callback_data="archive_7z"),
+            InlineKeyboardButton("RAR", callback_data="archive_rar")
+        ]
+    ]
+    await update.message.reply_text("Выберите формат архивации:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def archive_format_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data["archive_format"] = query.data.split("_")[1]  # zip / 7z / rar
+    await query.edit_message_text("Отправьте файл, который нужно заархивировать.")
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    if not doc:
+        await update.message.reply_text("Пришлите файл.")
+        return
+
+    file_path = f"downloads/{doc.file_name}"
+    os.makedirs("downloads", exist_ok=True)
+    await doc.get_file().download_to_drive(file_path)
+
+    format_ = context.user_data.get("archive_format")
+    if not format_:
+        await update.message.reply_text("Сначала выберите формат архивации командой /archive.")
+        return
+
+    archive_path = file_path + f".{format_}"
+    if format_ == "zip":
+        archive_file_zip(file_path, archive_path)
+    elif format_ == "7z":
+        archive_file_7z(file_path, archive_path)
+    elif format_ == "rar":
+        archive_file_rar(file_path, archive_path)
+
+    with open(archive_path, "rb") as f:
+        await update.message.reply_document(f, filename=os.path.basename(archive_path))
+
+# Разархивация
+def extract_zip(archive_path: str, extract_to: str):
+    try:
+        with zipfile.ZipFile(archive_path, 'r') as archive:
+            archive.extractall(extract_to)
+        logger.info(f"ZIP-архив распакован в: {extract_to}")
+    except Exception as e:
+        logger.error(f"Ошибка при распаковке ZIP: {e}")
+
+def extract_7z(archive_path: str, extract_to: str):
+    try:
+        with py7zr.SevenZipFile(archive_path, 'r') as archive:
+            archive.extractall(path=extract_to)
+        logger.info(f"7z-архив распакован в: {extract_to}")
+    except Exception as e:
+        logger.error(f"Ошибка при распаковке 7z: {e}")
+
+def extract_rar(archive_path: str, extract_to: str):
+    try:
+        with rarfile.RarFile(archive_path, 'r') as archive:
+            archive.extractall(path=extract_to)
+        logger.info(f"RAR-архив распакован в: {extract_to}")
+    except Exception as e:
+        logger.error(f"Ошибка при распаковке RAR: {e}")
+
+async def ask_extract_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Отправьте ZIP, RAR или 7Z архив для распаковки.")
+
+async def handle_archive_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    filename = doc.file_name.lower()
+    file_path = f"downloads/{doc.file_name}"
+    extract_to = "extracted/"
+
+    os.makedirs("downloads", exist_ok=True)
+    os.makedirs(extract_to, exist_ok=True)
+    await doc.get_file().download_to_drive(file_path)
+
+    if filename.endswith(".zip"):
+        extract_zip(file_path, extract_to)
+    elif filename.endswith(".7z"):
+        extract_7z(file_path, extract_to)
+    elif filename.endswith(".rar"):
+        extract_rar(file_path, extract_to)
+    else:
+        await update.message.reply_text("Неподдерживаемый формат архива.")
+        return
+
+    # Отправим список файлов
+    files = os.listdir(extract_to)
+    if files:
+        msg = "Распакованные файлы:\n" + "\n".join(files[:10])
+        await update.message.reply_text(msg)
+    else:
+        await update.message.reply_text("Распаковка прошла, но файлы не найдены.")
+
+# Топ процессов
+def get_sorted_processes(sort_by="cpu", limit=10):
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info']):
+        try:
+            processes.append(proc.info)
+        except psutil.NoSuchProcess:
+            continue
+
+    key = 'cpu_percent' if sort_by == 'cpu' else 'memory_info'
+    sorted_procs = sorted(processes, key=lambda x: x.get(key, 0), reverse=True)
+
+    result = ""
+    for proc in sorted_procs[:limit]:
+        mem = proc['memory_info'].rss / 1024 / 1024 if proc.get('memory_info') else 0
+        result += f"PID: {proc['pid']} | Name: {proc['name']} | CPU: {proc['cpu_percent']}% | RAM: {mem:.2f} MB\n"
+
+    logger.info(f"Сформирован список процессов по {sort_by.upper()}")
+    return result or "Нет данных."
+
+# Инфо о сети
+def get_network_info():
+    try:
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+
+        output = subprocess.check_output("netsh wlan show interfaces", shell=True, encoding='cp866')
+        ssid = signal = "Неизвестно"
+
+        for line in output.splitlines():
+            if "SSID" in line and "BSSID" not in line:
+                ssid = line.split(":", 1)[1].strip()
+            elif "Signal" in line:
+                signal = line.split(":", 1)[1].strip()
+
+        logger.info("Сетевые данные успешно получены")
+        return f"Имя хоста: {hostname}\nIP-адрес: {ip}\nWi-Fi: {ssid}\nУровень сигнала: {signal}"
+    except Exception as e:
+        logger.error(f"Ошибка при получении сетевых данных: {e}")
+        return f"Ошибка при получении Wi-Fi инфы: {e}"
+
+# Обработка кнопок
+async def system_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == 'proc_cpu':
+        result = get_sorted_processes("cpu")
+        await query.edit_message_text(f"🔧 Топ процессов по CPU:\n\n{result}")
+    elif query.data == 'proc_mem':
+        result = get_sorted_processes("mem")
+        await query.edit_message_text(f"🧠 Топ процессов по памяти:\n\n{result}")
+    elif query.data == 'network_info':
+        result = get_network_info()
+        await query.edit_message_text(f"🌐 Сетевые данные:\n\n{result}")
 
 async def find_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -430,6 +615,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Стандартные команды
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", system_status))
@@ -450,8 +636,26 @@ def main():
     app.add_handler(CommandHandler("clipboard_status", clipboard_status))
     app.add_handler(CommandHandler("restart", restart))
     app.add_handler(CommandHandler("shutdown", shutdown))
-    app.add_error_handler(error_handler)
+    app.add_handler(CommandHandler("archive", ask_archive_format))
+    app.add_handler(CommandHandler("extract", ask_extract_file))
+    app.add_handler(CallbackQueryHandler(archive_format_callback, pattern="^archive_"))
+
+    # Новая команда: системное меню
+    app.add_handler(CommandHandler("system", system_menu))
+
+    # Обработчик кнопок системного меню (CPU / RAM / Wi-Fi)
+    app.add_handler(CallbackQueryHandler(system_callback_handler, pattern="^(proc_cpu|proc_mem|network_info)$"))
+
+    # Другие колбэки
     app.add_handler(CallbackQueryHandler(button))
+
+    # Обработчик ошибок
+    app.add_error_handler(error_handler)
+
+    # Обработчик документов
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # после выбора формата
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_archive_upload))  # после /extract
+
 
     logger.info("Бот запущен")
     app.run_polling()
