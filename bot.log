@@ -68,3 +68,7 @@ NameError: name 'pyperclip' is not defined
 2025-05-09 12:15:33,351 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4/getUpdates "HTTP/1.1 200 OK"
 2025-05-09 12:15:43,471 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4/getUpdates "HTTP/1.1 200 OK"
 2025-05-09 12:15:53,521 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4/getUpdates "HTTP/1.1 200 OK"
+2025-05-09 12:28:51,423 - __main__ - INFO - \u0411\u043e\u0442 \u0437\u0430\u043f\u0443\u0449\u0435\u043d
+2025-05-09 12:28:51,653 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4/getMe "HTTP/1.1 200 OK"
+2025-05-09 12:28:51,685 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4/deleteWebhook "HTTP/1.1 200 OK"
+2025-05-09 12:28:51,686 - telegram.ext.Application - INFO - Application started
