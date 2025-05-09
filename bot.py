@@ -11,13 +11,16 @@ from handlers import (
     system_menu, system_callback_handler, handle_archive_upload, handle_document,
     handle_text_input, send_logs, password_check
 )
+from monitoring import start_monitoring, send_telegram_message, handle_error
 
 # Настройка логирования
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 TOKEN = "6563553728:AAGVhTKvRsQ2R6PBLuzxMRPCt-EGd-K5Ny4"
+CHAT_ID = "812761972"
 
+# Проверка наличия unrar
 def check_unrar():
     unrar_path = 'unrar.exe'
     if not any(os.access(os.path.join(path, unrar_path), os.X_OK) for path in os.getenv("PATH").split(os.pathsep)):
@@ -77,6 +80,9 @@ def main():
     # Обработчики для работы с файлами
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # архивация
     app.add_handler(MessageHandler(filters.Document.ALL, handle_archive_upload))  # распаковка
+
+    # Инициализация мониторинга
+    start_monitoring()
 
     logger.info("Бот запущен")
     app.run_polling()

@@ -7,6 +7,7 @@ import py7zr
 import rarfile
 import socket
 import json
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from utils import rate_limited
@@ -16,7 +17,6 @@ AUTHORIZED_USER_ID = 812761972
 FIRST_LAUNCH_AUTH = {}
 LAUNCH_PASSWORD = "12344321" 
 AUTH_FILE = "auth.json"
-
 
 # Загрузка статуса авторизации
 def load_auth():
@@ -96,7 +96,8 @@ async def password_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Неверный пароль. Попробуйте ещё раз.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    print(f"Ошибка при обработке обновления {update}: {context.error}")
+    error_message = f"Произошла ошибка при обработке обновления {update}: {context.error}"
+    send_telegram_message(error_message)
 
 async def safe_reply(update: Update, text: str):
     if update.callback_query:
