@@ -6,12 +6,31 @@ import zipfile
 import py7zr
 import rarfile
 import socket
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from utils import rate_limited
 
 SUPPORTED_TEXT_FORMATS = (".txt", ".json", ".ini", ".log", ".md")
 AUTHORIZED_USER_ID = 812761972
+FIRST_LAUNCH_AUTH = {}
+LAUNCH_PASSWORD = "12344321" 
+AUTH_FILE = "auth.json"
+
+
+# Загрузка статуса авторизации
+def load_auth():
+    if os.path.exists(AUTH_FILE):
+        with open(AUTH_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+# Сохранение статуса авторизации
+def save_auth(auth_data):
+    with open(AUTH_FILE, "w") as f:
+        json.dump(auth_data, f)
+
+AUTH_DATA = load_auth()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,33 +57,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"Пользователь {user.id} запустил бота.")
     
-    # Создание клавиатуры с кнопками
     keyboard = [
-    [InlineKeyboardButton("Help", callback_data='/help')],
-    [InlineKeyboardButton("Status", callback_data='/status')],
-    [InlineKeyboardButton("Logs", callback_data='/get_logs')],
-    [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
-    [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
-    [InlineKeyboardButton("Найти процесс", callback_data='/find_process')],
-    [InlineKeyboardButton("Топ процессов", callback_data='/system_callback_handler')],
-    [InlineKeyboardButton("Открыть программу", callback_data='/open')],
-    [InlineKeyboardButton("Закрыть программу", callback_data='/close')],
-    [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
-    [InlineKeyboardButton("Операции c текстом", callback_data='/show_text_operations_menu')],
-    [InlineKeyboardButton("Список файлов", callback_data='/list_files')],
-    [InlineKeyboardButton("Состояние буфера", callback_data='/clipboard_status')],
-    [InlineKeyboardButton("Перезагрузка", callback_data='/restart')],
-    [InlineKeyboardButton("Выключение", callback_data='/shutdown')],
-    [InlineKeyboardButton("Архивировать", callback_data='/archive')],
-    [InlineKeyboardButton("Распаковать", callback_data='/extract')],
+        [InlineKeyboardButton("Help", callback_data='help')],
+        [InlineKeyboardButton("Status", callback_data='status')],
+        [InlineKeyboardButton("Logs", callback_data='get_logs')],
+        [InlineKeyboardButton("Take Screenshot", callback_data='screenshot')],
+        [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
+        [InlineKeyboardButton("Найти процесс", callback_data='find_process')],
+        [InlineKeyboardButton("Топ процессов", callback_data='system_callback_handler')],
+        [InlineKeyboardButton("Открыть программу", callback_data='open')],
+        [InlineKeyboardButton("Закрыть программу", callback_data='close')],
+        [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
+        [InlineKeyboardButton("Операции c текстом", callback_data='show_text_operations_menu')],
+        [InlineKeyboardButton("Список файлов", callback_data='list_files')],
+        [InlineKeyboardButton("Состояние буфера", callback_data='clipboard_status')],
+        [InlineKeyboardButton("Перезагрузка", callback_data='restart')],
+        [InlineKeyboardButton("Выключение", callback_data='shutdown')],
+        [InlineKeyboardButton("Архивировать", callback_data='archive')],
+        [InlineKeyboardButton("Распаковать", callback_data='extract')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Отправка сообщения с кнопками
     await update.message.reply_text(
         f"Привет, {user.first_name}! Я бот для управления вашим компьютером.\nВыберите команду:",
         reply_markup=reply_markup
     )
+
+async def password_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    text = update.message.text
+
+    if user_id == str(AUTHORIZED_USER_ID) and AUTH_DATA.get(user_id) != True:
+        if text == LAUNCH_PASSWORD:
+            AUTH_DATA[user_id] = True
+            save_auth(AUTH_DATA)
+            await update.message.reply_text("🔓 Пароль принят. Введите /start снова.")
+        else:
+            await update.message.reply_text("❌ Неверный пароль. Попробуйте ещё раз.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(f"Ошибка при обработке обновления {update}: {context.error}")
@@ -84,23 +113,23 @@ async def system_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     logger.info(f"User {update.effective_user.id} started the bot.")
     keyboard = [
-        [InlineKeyboardButton("Help", callback_data='/help')],
-    [InlineKeyboardButton("Status", callback_data='/status')],
-    [InlineKeyboardButton("Logs", callback_data='/get_logs')],
-    [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
+    [InlineKeyboardButton("Help", callback_data='help')],
+    [InlineKeyboardButton("Status", callback_data='status')],
+    [InlineKeyboardButton("Logs", callback_data='get_logs')],
+    [InlineKeyboardButton("Take Screenshot", callback_data='screenshot')],
     [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
-    [InlineKeyboardButton("Найти процесс", callback_data='/find_process')],
-    [InlineKeyboardButton("Топ процессов", callback_data='/system_callback_handler')],
-    [InlineKeyboardButton("Открыть программу", callback_data='/open')],
-    [InlineKeyboardButton("Закрыть программу", callback_data='/close')],
+    [InlineKeyboardButton("Найти процесс", callback_data='find_process')],
+    [InlineKeyboardButton("Топ процессов", callback_data='system_callback_handler')],
+    [InlineKeyboardButton("Открыть программу", callback_data='open')],
+    [InlineKeyboardButton("Закрыть программу", callback_data='close')],
     [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
-    [InlineKeyboardButton("Операции c текстом", callback_data='/show_text_operations_menu')],
-    [InlineKeyboardButton("Список файлов", callback_data='/list_files')],
-    [InlineKeyboardButton("Состояние буфера", callback_data='/clipboard_status')],
-    [InlineKeyboardButton("Перезагрузка", callback_data='/restart')],
-    [InlineKeyboardButton("Выключение", callback_data='/shutdown')],
-    [InlineKeyboardButton("Архивировать", callback_data='/archive')],
-    [InlineKeyboardButton("Распаковать", callback_data='/extract')],
+    [InlineKeyboardButton("Операции c текстом", callback_data='show_text_operations_menu')],
+    [InlineKeyboardButton("Список файлов", callback_data='list_files')],
+    [InlineKeyboardButton("Состояние буфера", callback_data='clipboard_status')],
+    [InlineKeyboardButton("Перезагрузка", callback_data='restart')],
+    [InlineKeyboardButton("Выключение", callback_data='shutdown')],
+    [InlineKeyboardButton("Архивировать", callback_data='archive')],
+    [InlineKeyboardButton("Распаковать", callback_data='extract')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Бот запущен. Выберите команду:", reply_markup=reply_markup)
