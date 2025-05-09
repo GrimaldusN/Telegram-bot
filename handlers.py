@@ -8,11 +8,21 @@ import rarfile
 import socket
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from utils import rate_limited
 
 SUPPORTED_TEXT_FORMATS = (".txt", ".json", ".ini", ".log", ".md")
 AUTHORIZED_USER_ID = 812761972
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    filename='bot.log',  # лог-файл
+    filemode='a',         # добавление в конец
+)
+
 logger = logging.getLogger(__name__)
+
+LOG_FILE_PATH = "bot.log"
 
 cut_buffer = None
 copy_buffer = None
@@ -32,11 +42,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
     [InlineKeyboardButton("Help", callback_data='/help')],
     [InlineKeyboardButton("Status", callback_data='/status')],
+    [InlineKeyboardButton("Logs", callback_data='/get_logs')],
     [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
     [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
     [InlineKeyboardButton("Найти процесс", callback_data='/find_process')],
+    [InlineKeyboardButton("Топ процессов", callback_data='/system_callback_handler')],
     [InlineKeyboardButton("Открыть программу", callback_data='/open')],
     [InlineKeyboardButton("Закрыть программу", callback_data='/close')],
+    [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
     [InlineKeyboardButton("Операции c текстом", callback_data='/show_text_operations_menu')],
     [InlineKeyboardButton("Список файлов", callback_data='/list_files')],
     [InlineKeyboardButton("Состояние буфера", callback_data='/clipboard_status')],
@@ -64,6 +77,7 @@ async def safe_reply(update: Update, text: str):
     else:
         logger.warning("Не удалось отправить сообщение: неизвестный тип update.")
 
+@rate_limited(1)
 async def system_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
         logger.warning(f"Unauthorized user {update.effective_user.id} tried to use the bot.")
@@ -71,19 +85,27 @@ async def system_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} started the bot.")
     keyboard = [
         [InlineKeyboardButton("Help", callback_data='/help')],
-        [InlineKeyboardButton("Status", callback_data='/status')],
-        [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
-        [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
-        [InlineKeyboardButton("Процессы (по CPU)", callback_data='proc_cpu')],
-        [InlineKeyboardButton("Процессы (по памяти)", callback_data='proc_mem')],
-        [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
-        [InlineKeyboardButton("Clipboard Status", callback_data='/clipboard_status')],
-        [InlineKeyboardButton("Restart", callback_data='/restart')],
-        [InlineKeyboardButton("Shutdown", callback_data='/shutdown')]
+    [InlineKeyboardButton("Status", callback_data='/status')],
+    [InlineKeyboardButton("Logs", callback_data='/get_logs')],
+    [InlineKeyboardButton("Take Screenshot", callback_data='/screenshot')],
+    [InlineKeyboardButton("Операции с файлами", callback_data='show_file_operations_menu')],
+    [InlineKeyboardButton("Найти процесс", callback_data='/find_process')],
+    [InlineKeyboardButton("Топ процессов", callback_data='/system_callback_handler')],
+    [InlineKeyboardButton("Открыть программу", callback_data='/open')],
+    [InlineKeyboardButton("Закрыть программу", callback_data='/close')],
+    [InlineKeyboardButton("Инфо о сети", callback_data='network_info')],
+    [InlineKeyboardButton("Операции c текстом", callback_data='/show_text_operations_menu')],
+    [InlineKeyboardButton("Список файлов", callback_data='/list_files')],
+    [InlineKeyboardButton("Состояние буфера", callback_data='/clipboard_status')],
+    [InlineKeyboardButton("Перезагрузка", callback_data='/restart')],
+    [InlineKeyboardButton("Выключение", callback_data='/shutdown')],
+    [InlineKeyboardButton("Архивировать", callback_data='/archive')],
+    [InlineKeyboardButton("Распаковать", callback_data='/extract')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Бот запущен. Выберите команду:", reply_markup=reply_markup)
 
+@rate_limited(1)
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
         logger.warning(f"Unauthorized user {update.effective_user.id} tried to use the help command.")
@@ -94,6 +116,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔧 *Система:*\n"
         "/help — Помощь\n"
         "/status — Статус системы\n"
+        "/get_logs — Логи бота за сессию\n"
         "/screenshot — Сделать скриншот\n"
         "/restart — Перезагрузка ПК\n"
         "/shutdown — Выключение ПК\n\n"
@@ -116,6 +139,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/ask_extract_file <путь к архиву> — Распаковать архив\n\n"
         "⚙️ *Процессы и программы:*\n"
         "/find_process <имя> — Найти процесс\n"
+        "/system_callback_handler - Топ процессов"
         "/open <программа> — Открыть программу\n"
         "/close <имя процесса> — Завершить процесс\n"
     )
@@ -126,6 +150,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.callback_query:
         await update.callback_query.message.reply_text(help_text)
 
+@rate_limited(1)
+async def send_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != AUTHORIZED_USER_ID:
+        logger.warning(f"Unauthorized user {update.effective_user.id} tried to access logs.")
+        return
+
+    if not os.path.exists(LOG_FILE_PATH):
+        await update.message.reply_text("Лог-файл не найден.")
+        return
+
+    with open(LOG_FILE_PATH, "rb") as log_file:
+        await update.message.reply_document(log_file, filename="bot.log")
+        logger.info(f"User {update.effective_user.id} requested and received log file.")
+
+@rate_limited(1)
 async def system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     logger.info(f"User {user_id} requested system status.")
@@ -168,6 +207,7 @@ def archive_file_rar(source_path: str, archive_path: str):
     except Exception as e:
         logger.error(f"Ошибка при создании RAR: {e}")
 
+@rate_limited(1)
 async def ask_archive_format(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
@@ -239,6 +279,7 @@ def extract_rar(archive_path: str, extract_to: str):
     except Exception as e:
         logger.error(f"Ошибка при распаковке RAR: {e}")
 
+@rate_limited(1)
 async def ask_extract_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Отправьте ZIP, RAR или 7Z архив для распаковки.")
 
@@ -294,6 +335,7 @@ def get_sorted_processes(sort_by="cpu", limit=10):
     return result or "Нет данных."
 
 # Инфо о сети
+@rate_limited(1)
 def get_network_info():
     try:
         hostname = socket.gethostname()

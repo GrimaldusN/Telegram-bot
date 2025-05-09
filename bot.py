@@ -4,7 +4,7 @@ import os
 import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from handlers import start, help_command, system_status, take_screenshot, clipboard_status, restart, shutdown, button, show_file_operations_menu, find_process, open_program, close_program, list_files, search_file, ask_archive_format, ask_extract_file, system_menu, system_callback_handler, handle_archive_upload, handle_document, handle_text_input
+from handlers import start, help_command, system_status, take_screenshot, clipboard_status, restart, shutdown, button, show_file_operations_menu, find_process, open_program, close_program, list_files, search_file, ask_archive_format, ask_extract_file, system_menu, system_callback_handler, handle_archive_upload, handle_document, handle_text_input, send_logs
 
 # Настройка логирования
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG)
@@ -31,6 +31,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", system_status))
+    app.add_handler(CommandHandler("get_logs", send_logs))
     app.add_handler(CommandHandler("system_menu", system_menu))
     app.add_handler(CommandHandler("screenshot", take_screenshot))
     app.add_handler(CommandHandler("show_file_operations_menu", show_file_operations_menu))
