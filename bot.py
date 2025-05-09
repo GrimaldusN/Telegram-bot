@@ -4,7 +4,7 @@ import os
 import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from handlers import start, help_command, system_status, take_screenshot, clipboard_status, restart, shutdown, button, show_file_operations_menu, find_process, open_program, close_program, copy_text, paste_text, list_files, search_file, view_file,send_file, copy_file,cut_file, paste_file, ask_archive_format, ask_extract_file, archive_format_callback, system_menu, system_callback_handler, error_handler, handle_archive_upload, handle_document
+from handlers import start, help_command, system_status, take_screenshot, clipboard_status, restart, shutdown, button, show_file_operations_menu, find_process, open_program, close_program, list_files, search_file, ask_archive_format, ask_extract_file, system_menu, system_callback_handler, handle_archive_upload, handle_document, handle_text_input
 
 # Настройка логирования
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG)
@@ -31,20 +31,15 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", system_status))
+    app.add_handler(CommandHandler("system_menu", system_menu))
     app.add_handler(CommandHandler("screenshot", take_screenshot))
     app.add_handler(CommandHandler("show_file_operations_menu", show_file_operations_menu))
     app.add_handler(CommandHandler("find_process", find_process))
     app.add_handler(CommandHandler("open", open_program))
     app.add_handler(CommandHandler("close", close_program))
-    app.add_handler(CommandHandler("copy_text", copy_text))
-    app.add_handler(CommandHandler("paste_text", paste_text))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_input))
     app.add_handler(CommandHandler("list_files", list_files))
     app.add_handler(CommandHandler("search", search_file))
-    app.add_handler(CommandHandler("view_file", view_file))
-    app.add_handler(CommandHandler("send_file", send_file))
-    app.add_handler(CommandHandler("copy_file", copy_file))
-    app.add_handler(CommandHandler("cut_file", cut_file))
-    app.add_handler(CommandHandler("paste_file", paste_file))
     app.add_handler(CommandHandler("clipboard_status", clipboard_status))
     app.add_handler(CommandHandler("restart", restart))
     app.add_handler(CommandHandler("shutdown", shutdown))

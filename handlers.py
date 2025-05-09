@@ -37,15 +37,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [InlineKeyboardButton("Найти процесс", callback_data='/find_process')],
     [InlineKeyboardButton("Открыть программу", callback_data='/open')],
     [InlineKeyboardButton("Закрыть программу", callback_data='/close')],
-    [InlineKeyboardButton("Копировать текст", callback_data='/copy_text')],
-    [InlineKeyboardButton("Вставить текст", callback_data='/paste_text')],
+    [InlineKeyboardButton("Операции c текстом", callback_data='/show_text_operations_menu')],
     [InlineKeyboardButton("Список файлов", callback_data='/list_files')],
-    [InlineKeyboardButton("Поиск файла", callback_data='/search')],
-    [InlineKeyboardButton("Просмотр файла", callback_data='/view_file')],
-    [InlineKeyboardButton("Отправить файл", callback_data='/send_file')],
-    [InlineKeyboardButton("Копировать файл", callback_data='/copy_file')],
-    [InlineKeyboardButton("Вырезать файл", callback_data='/cut_file')],
-    [InlineKeyboardButton("Вставить файл", callback_data='/paste_file')],
     [InlineKeyboardButton("Состояние буфера", callback_data='/clipboard_status')],
     [InlineKeyboardButton("Перезагрузка", callback_data='/restart')],
     [InlineKeyboardButton("Выключение", callback_data='/shutdown')],
@@ -97,24 +90,34 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     logger.info(f"User {update.effective_user.id} requested help.")
     help_text = (
-        "Доступные команды:\n"
-        "/help - Помощь\n"
-        "/status - Статус системы\n"
-        "/find_process <имя> - Найти процесс\n"
-        "/screenshot - Скриншот\n"
-        "/open <программа> - Открыть программу\n"
-        "/copy_text <текст> - Копировать текст\n"
-        "/paste_text - Вставить текст\n"
-        "/list_files <путь> - Файлы в директории\n"
-        "/search <путь> <шаблон> - Поиск файлов\n"
-        "/view_file <путь> - Просмотр файла\n"
-        "/send_file <путь> - Отправить файл\n"
-        "/copy_file <файл> - Копировать файл\n"
-        "/cut_file <файл> - Вырезать файл\n"
-        "/paste_file <папка> - Вставить файл\n"
-        "/clipboard_status - Состояние буфера\n"
-        "/restart - Перезагрузка\n"
-        "/shutdown - Выключение"
+        "📋 *Доступные команды:*\n\n"
+        "🔧 *Система:*\n"
+        "/help — Помощь\n"
+        "/status — Статус системы\n"
+        "/screenshot — Сделать скриншот\n"
+        "/restart — Перезагрузка ПК\n"
+        "/shutdown — Выключение ПК\n\n"
+        "🧠 *Буфер обмена:*\n"
+        "/copy_text <текст> — Копировать текст в буфер\n"
+        "/paste_text — Вставить текст из буфера\n"
+        "/clipboard_status — Статус буфера обмена\n"
+        "/show_text_menu — Меню операций с текстом\n\n"
+        "📁 *Файлы:*\n"
+        "/list_files <путь> — Список файлов\n"
+        "/search <путь> <шаблон> — Поиск файлов\n"
+        "/view_file <путь> — Просмотр файла\n"
+        "/send_file <путь> — Отправить файл\n"
+        "/copy_file <файл> — Копировать файл\n"
+        "/cut_file <файл> — Вырезать файл\n"
+        "/paste_file <папка> — Вставить файл\n"
+        "/show_file_operations_menu — Меню операций с файлами\n\n"
+        "📦 *Архивы:*\n"
+        "/ask_archive_format <файл/папка> — Архивировать\n"
+        "/ask_extract_file <путь к архиву> — Распаковать архив\n\n"
+        "⚙️ *Процессы и программы:*\n"
+        "/find_process <имя> — Найти процесс\n"
+        "/open <программа> — Открыть программу\n"
+        "/close <имя процесса> — Завершить процесс\n"
     )
     
     # Проверяем источник вызова
@@ -352,6 +355,7 @@ async def show_file_operations_menu(update: Update, context: ContextTypes.DEFAUL
     # Проверяем, что сообщение существует
     if update.message:
         keyboard = [
+            [InlineKeyboardButton("Открыть файл", callback_data='open_file')],
             [InlineKeyboardButton("Отправить файл", callback_data='send_file')],
             [InlineKeyboardButton("Скопировать файл", callback_data='copy_file')],
             [InlineKeyboardButton("Вставить файл", callback_data='paste_file')],
@@ -460,6 +464,19 @@ async def close_program(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error closing process {process_name}: {e}")
     else:
         await update.message.reply_text(f"Процесс {process_name} не найден.")
+
+async def show_text_operations_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != AUTHORIZED_USER_ID:
+        logger.warning(f"Unauthorized user {update.effective_user.id} tried to access text operations menu.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("📋 Вставить текст", callback_data='/paste_text')],
+        [InlineKeyboardButton("✍️ Копировать текст (ввести)", callback_data='copy_text_prompt')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text("Выберите операцию с текстом:", reply_markup=reply_markup)
 
 async def copy_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != AUTHORIZED_USER_ID:
@@ -618,6 +635,15 @@ async def shutdown(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Ошибка при выключении системы: {e}")
         logger.error(f"Error initiating system shutdown: {e}")
 
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get('awaiting_copy_text'):
+        text = update.message.text
+        pyperclip.copy(text)
+        await update.message.reply_text(f"Текст скопирован: {text}")
+        logger.info(f"User {update.effective_user.id} copied text via prompt: {text}")
+        context.user_data['awaiting_copy_text'] = False
+
+
 # --- Для других команд добавляем логи и проверки на источник вызова ---
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -668,6 +694,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif command == 'extract_file':
             logger.info(f"User {update.effective_user.id} selected to extract file.")
             await ask_extract_file(update, context)
+        elif command == 'copy_text_prompt':
+            logger.info(f"User {update.effective_user.id} requested to copy text.")
+        await query.message.reply_text("Введите текст, который нужно скопировать:")
+        context.user_data['awaiting_copy_text'] = True
+
 
     except Exception as e:
         logger.error(f"Error processing button click: {e}")
